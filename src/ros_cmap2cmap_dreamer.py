@@ -19,7 +19,7 @@ from rl_server.msg import Episode
 from heron_msgs.msg import Drive
 from sensor_msgs.msg import Image
 
-import much_simpler_dreamer
+import cmap_policy as dreamer
 import tools
 
 class DreamerAgent:
@@ -28,7 +28,6 @@ class DreamerAgent:
         self.agent = None
         self.save_directory = '/mnt/nvme-storage/antoine/DREAMER/dreamer/logdir/kf_sim/dreamer/25_float32_trauma_smoother/'
         self.episode = {}
-        #self.config = self.parse_dreamer_config()
         self.Done = True
         self.random_agent = True
         self.reset = False
@@ -49,7 +48,7 @@ class DreamerAgent:
 
     def initialize_agent(self):
         parser = argparse.ArgumentParser()
-        for key, value in much_simpler_dreamer.define_config().items():
+        for key, value in dreamer.define_config().items():
             parser.add_argument('--'+str(key), type=tools.args_type(value), default=value)
         config, unknown = parser.parse_known_args()
         if config.gpu_growth:
@@ -62,7 +61,7 @@ class DreamerAgent:
 
         datadir = self.save_directory+'/episodes'
         actspace = gym.spaces.Box(np.array([-1,-1]),np.array([1,1]))
-        self.agent = much_simpler_dreamer.Dreamer(config, actspace)
+        self.agent = dreamer.Dreamer(config, actspace)
         if pathlib.Path(self.save_directory).exists():
             print('Load checkpoint.')
             self.agent.load(self.save_directory)
@@ -75,8 +74,6 @@ class DreamerAgent:
         self.state = None
         self.step = 0
         self.episode = {}
-        #self.episode['vlin'] = []
-        #self.episode['vrot'] = []
         self.episode['image'] = []
         self.episode['action'] = []
         self.episode['reward'] = []
@@ -107,9 +104,6 @@ class DreamerAgent:
             self.actions = actions
             self.step += 1
             if self.step > self.max_steps:
-                #if not self.random_agent:
-                #   embed = self.agent.policy2(self.obs, self.state, self.training_mode)
-                #   print('Density of image encoding: '+str(100*np.sum(embed > 0.001)/np.max(embed.shape))+'%')
                 print('Done')
                 self.Done = True
                 self.saveEpisode()
@@ -146,14 +140,11 @@ class DreamerAgent:
         print('settings updated')
 
     def actions2Twist(self, actions):
-        #print(actions)
         self.drive.left = actions[0]
         self.drive.right = actions[1]
         return self.drive
          
     def incrementEpisode(self, img, act, reward):
-        #self.episode['vlin'].append(self.vlin)
-        #self.episode['vrot'].append(self.rot)
         self.episode['image'].append(img)
         self.episode['action'].append(act)
         self.episode['reward'].append(reward)
@@ -190,12 +181,8 @@ class DreamerAgent:
         self.episode['discount'] = np.array(self.episode['discount'])
         self.episode = {k: self.convert(v) for k, v in self.episode.items()}
         timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-        #for episode in episodes:
         identifier = str(uuid.uuid4().hex)
         length = len(self.episode['reward'])
-        #if self.training_mode:
-        #filename = directory / '{}-{}-{}.npz'.format(timestamp,identifier,length)
-        #else:
         filename = directory /'{}-{}-{}.npz'.format(timestamp,identifier,length)
         print('saving episode to '+str(filename))
         with io.BytesIO() as f1:

@@ -18,7 +18,7 @@ from rl_server.msg import Episode
 from heron_msgs.msg import Drive
 from sensor_msgs.msg import LaserScan, Image
 
-import laser_simpler_dreamer as simpler_dreamer
+import lzr_policy as dreamer
 import tools
 
 class DreamerAgent:
@@ -27,7 +27,6 @@ class DreamerAgent:
         self.agent = None
         self.save_directory = '/mnt/nvme-storage/antoine/DREAMER/dreamer/logdir/kf_sim/dreamer/23_laser2image/'
         self.episode = {}
-        #self.config = self.parse_dreamer_config()
         self.Done = True
         self.random_agent = True
         self.reset = False
@@ -53,7 +52,7 @@ class DreamerAgent:
 
     def initialize_agent(self):
         parser = argparse.ArgumentParser()
-        for key, value in simpler_dreamer.define_config().items():
+        for key, value in dreamer.define_config().items():
             parser.add_argument('--'+str(key), type=tools.args_type(value), default=value)
         config, unknown = parser.parse_known_args()
         if config.gpu_growth:
@@ -66,7 +65,7 @@ class DreamerAgent:
 
         datadir = self.save_directory+'/episodes'
         actspace = gym.spaces.Box(np.array([-1,-1]),np.array([1,1]))
-        self.agent = simpler_dreamer.Dreamer(config, pathlib.Path(datadir), actspace)
+        self.agent = dreamer.Dreamer(config, pathlib.Path(datadir), actspace)
         if pathlib.Path(self.save_directory+'/variables.pkl').exists():
             print('Load checkpoint.')
             self.agent.load(self.save_directory+'/variables.pkl')
@@ -79,8 +78,6 @@ class DreamerAgent:
         self.state = None
         self.step = 0
         self.episode = {}
-        #self.episode['vlin'] = []
-        #self.episode['vrot'] = []
         self.episode['image'] = []
         self.episode['laser'] = []
         self.episode['action'] = []
@@ -99,8 +96,6 @@ class DreamerAgent:
         self.obs['reward'] = np.zeros((1))
 
     def imageCallback(self, obs):
-        #if self.skip%4:
-        #    self.skip = 1
         self.image = np.reshape(np.fromstring(obs.data, np.uint8),[64,64,3])
         if not self.Done:
             self.obs['laser'][0] = self.laser
@@ -195,7 +190,6 @@ class DreamerAgent:
                 pass
         self.episode = {k: self.convert(v) for k, v in self.episode.items()}
         timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-        #for episode in episodes:
         identifier = str(uuid.uuid4().hex)
         length = len(self.episode['reward'])
         filename = directory /'{}-{}-{}.npz'.format(timestamp,identifier,length)
