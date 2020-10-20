@@ -18,42 +18,29 @@ from rl_server.msg import Episode
 from heron_msgs.msg import Drive
 from sensor_msgs.msg import LaserScan, Image
 
-import much_simpler_laser_dreamer as simpler_dreamer
+import lzr_policy as dreamer
 import tools
 
 class DreamerAgent:
     def __init__(self):
         # DREAMER
+        self.ready = False
         self.agent = None
         self.save_directory = '/mnt/nvme-storage/antoine/DREAMER/dreamer/logdir/kf_sim/dreamer/26_laser2image_refined_smoother/'
-        self.episode = {}
-        #self.config = self.parse_dreamer_config()
-        self.Done = True
-        self.random_agent = True
-        self.reset = False
-        self.agent_not_initialized = True
-        self.setup_ok = False
-        self.reset_agent_call = np.array([False])
 	self.precision = 32
         self.max_steps = 1000
         self.obs = {}
-        self.skip = 0
-        self.obs['laser'] = np.zeros((1,256,1),dtype=np.float32)
-        self.obs['image'] = np.zeros((1,64,64,3),dtype=np.uint8)
-        self.obs['reward'] = np.zeros((1))
-        self.reward = 2.5
         self.initialize_agent()
         self.refresh_agent()
         # ROS
         self.drive = Drive()
         self.action_pub_ = rospy.Publisher('/cmd_rl', Drive, queue_size=1)
         rospy.Subscriber("/front/scan", LaserScan, self.laserCallback, queue_size=1)
-        rospy.Subscriber("/reward_generator/reward", Float32, self.rewardCallback, queue_size=1)
         rospy.Subscriber("/reward_generator/DreamersView", Image, self.imageCallback, queue_size=1)
 
     def initialize_agent(self):
         parser = argparse.ArgumentParser()
-        for key, value in simpler_dreamer.define_config().items():
+        for key, value in dreamer.define_config().items():
             parser.add_argument('--'+str(key), type=tools.args_type(value), default=value)
         config, unknown = parser.parse_known_args()
         if config.gpu_growth:
@@ -65,7 +52,7 @@ class DreamerAgent:
         config.steps = int(config.steps)
 
         actspace = gym.spaces.Box(np.array([-1,-1]),np.array([1,1]))
-        self.agent = simpler_dreamer.Dreamer(config, actspace)
+        self.agent = dreamer.Dreamer(config, actspace)
         if pathlib.Path(self.save_directory).exists():
             print('Load checkpoint.')
             self.agent.load(self.save_directory)
@@ -86,23 +73,19 @@ class DreamerAgent:
         self.obs['laser'] = np.zeros((1,256,1),dtype=np.float32)
         self.obs['image'] = np.zeros((1,64,64,3),dtype=np.uint8)
         self.obs['reward'] = np.zeros((1))
+        self.ready = True
 
     def imageCallback(self, obs):
-        self.image = np.reshape(np.fromstring(obs.data, np.uint8),[64,64,3])
-        self.obs['laser'][0] = self.laser
-        self.obs['image'][0] = self.image
-        self.obs['reward'][0] = self.reward
-        t_actions, self.state = self.agent.policy(self.obs, self.state, False)
-        actions = np.array(t_actions)[0]
-        self.action_pub_.publish(self.actions2Twist(actions))
+        if self.ready:
+            self.image = np.reshape(np.fromstring(obs.data, np.uint8),[64,64,3])
+            self.obs['laser'][0] = self.laser
+            t_actions, self.state = self.agent.policy(self.obs, self.state, False)
+            actions = np.array(t_actions)[0]
+            self.action_pub_.publish(self.actions2Twist(actions))
     
     def laserCallback(self, obs):
         self.laser = np.expand_dims(np.clip(np.min(np.reshape(np.nan_to_num(np.array(obs.ranges)),[-1,2]),axis=1)[-256:], 0, 100000),-1)
     
-    def rewardCallback(self, reward):
-        if not self.Done:
-            self.reward = reward.data
-
     def actions2Twist(self, actions):
         self.drive.left = actions[0]
         self.drive.right = actions[1]
