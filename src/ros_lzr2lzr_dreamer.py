@@ -18,7 +18,7 @@ from rl_server.msg import Episode
 from heron_msgs.msg import Drive
 from sensor_msgs.msg import LaserScan, Image
 
-import much_simpler_laser_dreamer as simpler_dreamer
+import lzr_policy as dreamer
 import tools
 
 class DreamerAgent:
@@ -27,7 +27,6 @@ class DreamerAgent:
         self.agent = None
         self.save_directory = '/mnt/nvme-storage/antoine/DREAMER/dreamer/logdir/kf_sim/dreamer/26_laser2image_refined_smoother/'
         self.episode = {}
-        #self.config = self.parse_dreamer_config()
         self.Done = True
         self.random_agent = True
         self.reset = False
@@ -52,7 +51,7 @@ class DreamerAgent:
 
     def initialize_agent(self):
         parser = argparse.ArgumentParser()
-        for key, value in simpler_dreamer.define_config().items():
+        for key, value in dreamer.define_config().items():
             parser.add_argument('--'+str(key), type=tools.args_type(value), default=value)
         config, unknown = parser.parse_known_args()
         if config.gpu_growth:
@@ -64,7 +63,7 @@ class DreamerAgent:
         config.steps = int(config.steps)
 
         actspace = gym.spaces.Box(np.array([-1,-1]),np.array([1,1]))
-        self.agent = simpler_dreamer.Dreamer(config, actspace)
+        self.agent = dreamer.Dreamer(config, actspace)
         if pathlib.Path(self.save_directory).exists():
             print('Load checkpoint.')
             self.agent.load(self.save_directory)
@@ -184,7 +183,6 @@ class DreamerAgent:
                 pass
         self.episode = {k: self.convert(v) for k, v in self.episode.items()}
         timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-        #for episode in episodes:
         identifier = str(uuid.uuid4().hex)
         length = len(self.episode['reward'])
         filename = directory /'{}-{}-{}.npz'.format(timestamp,identifier,length)
